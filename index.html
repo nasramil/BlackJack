@@ -1,0 +1,331 @@
+<html>
+
+<head>
+   <style type="text/css">
+      /* Stile per l'input di testo dove l'utente inserisce il proprio nome */
+.testo {
+   background-color: white; /* Sfondo bianco */
+   color: blue; /* Testo di colore blu */
+   height: 30px; /* Altezza del campo di testo */
+   width: 150px; /* Larghezza del campo di testo */
+   text-align: left; /* Testo allineato a sinistra */
+   font-size: 15px; /* Dimensione del testo */
+   border-width: 2px; /* Spessore del bordo leggermente aumentato */
+   border: solid black; /* Bordo di colore nero */
+   float: left; /* Permette di posizionare l'elemento accanto ad altri con float */
+   margin: 5px; /* Margine esterno di 5px */
+   border-radius: 5px; /* Angoli arrotondati */
+   padding: 5px; /* Spazio interno per migliorare la leggibilità */
+}
+
+/* Stile per i pulsanti di gioco */
+.bottone {
+   background-color: blue; /* Sfondo blu */
+   color: white; /* Testo bianco */
+   height: 30px; /* Altezza del pulsante */
+   width: 50px; /* Larghezza del pulsante */
+   text-align: center; /* Testo centrato */
+   font-size: 15px; /* Dimensione del testo */
+   border-width: 2px; /* Spessore del bordo leggermente aumentato */
+   border: solid white; /* Bordo bianco */
+   float: left; /* Posizionamento flottante */
+   margin: 5px; /* Margine esterno di 5px */
+   border-radius: 5px; /* Angoli arrotondati */
+   cursor: pointer; /* Indica che è cliccabile */
+   transition: background-color 0.3s ease; /* Effetto al passaggio del mouse */
+}
+
+.bottone:hover {
+   background-color: darkblue; /* Cambia colore al passaggio del mouse */
+}
+
+      #gioco
+      {
+         visibility: hidden;
+      }
+
+      /* Posizionamento dell'elemento per inviare messaggi (non utilizzato nel codice HTML) */
+      #scrivi 
+      {
+         left: 10px;
+         top:30px;
+         position: absolute;
+      }
+
+      /* Posizionamento dell'elemento per inviare messaggi (non utilizzato nel codice HTML) */
+      #invia 
+      {
+         left: 170px;
+         top:30px;
+         position: absolute;
+      }
+
+      /* Area di attesa per i giocatori in coda */
+      #attesa 
+      {
+        left: 10px;
+        top: 10px;
+        visibility: hidden; /* Inizialmente nascosta */
+      }
+
+/* Stile per la visualizzazione dei giocatori */
+.giocatore {
+   border: 2px solid black; /* Bordo più spesso */
+   position: absolute; /* Posizione assoluta nella pagina */
+   text-align: center; /* Testo centrato all'interno */
+   padding: 10px; /* Migliora la leggibilità */
+   border-radius: 5px; /* Angoli arrotondati */
+   background-color: rgba(0, 0, 0, 0.05); /* Leggera sfumatura di sfondo */
+}
+
+/* Area del banco di gioco */
+#banco {
+   top: 45px;
+   left: 30px;
+   height: 70px;
+   width: 150px;
+   border: 2px solid black; /* Bordo più spesso */
+   text-align: left; /* Testo allineato a sinistra */
+   position: absolute; /* Posizione assoluta nella pagina */
+   background-color: #f8f8f8; /* Sfondo chiaro per migliorare la leggibilità */
+   padding: 5px; /* Spazio interno */
+   border-radius: 5px; /* Angoli arrotondati */
+}
+
+  </style>
+
+</head>
+
+<body>
+   <!-- Interfaccia per l'inserimento del nome utente e accesso al gioco -->
+   <div id="username"> Username: <br>
+      <input type='text' class='testo' id='nome' value=''> <!-- Campo di testo per inserire il nome utente -->
+      <input type='button' class='bottone' id='entra' value='entra' onClick='entrare(webSocket);'> <!-- Pulsante per accedere al gioco -->
+   </div>
+
+   <!-- Area di gioco visibile solo dopo l'accesso -->
+   <div id='gioco'>
+      <div id = "banco" > Banco </div> <!-- Area del banco del gioco -->
+      <div id = "giocatoreAttivo" ></div> <!-- Area che mostra il giocatore attivo -->
+      
+      <!-- Pulsante per l'azione "stare" -->
+      <input type='button' class = "bottone" style = "top:65px; left:200px; position: absolute;" value='stare' onClick='stare(webSocket);'>
+      
+      <!-- Pulsante per l'azione "carta" -->
+      <input type='button' class = "bottone" style = "top:65px; left:270px; position: absolute;" value='carta' onClick='carta(webSocket);'>
+      
+      <!-- Pulsante per l'azione "raddoppio" -->
+      <input type='button' class = "bottone" style = "top:65px; left:340px; position: absolute; width: 100px;" value='raddoppio' onClick='raddoppio(webSocket);'>
+   </div>
+
+   <!-- Area per mostrare i messaggi di attesa -->
+   <div id = attesa></div>
+
+</body>
+
+</html>
+
+<script>
+
+   // Creazione del WebSocket per la comunicazione con il server
+   let webSocket = new WebSocket(location.origin.replace(/^http/, 'ws'));
+
+   // Variabili per memorizzare le informazioni del giocatore
+   let nomeUtente = ""; // Nome dell'utente corrente
+   let numeroGiocatori = 0; // Numero totale di giocatori attivi
+   let indiceClient = 0; // Indice del client corrente
+
+   // Collegamenti agli elementi HTML della pagina
+   const nome = document.getElementById('nome'); // Input per il nome utente
+   const username = document.getElementById('username'); // Div contenente l'interfaccia di inserimento del nome utente
+   const entra = document.getElementById('entra'); // Pulsante per entrare nel gioco
+   const attesa = document.getElementById('attesa'); // Div che mostra i messaggi di attesa
+   const gioco = document.getElementById('gioco'); // Area principale del gioco
+   const banco = document.getElementById('banco'); // Area che mostra le carte del banco
+   const giocatoreAttivo = document.getElementById('giocatoreAttivo'); // Area che mostra il nome del giocatore attivo
+
+   // Funzione per mostrare il nome e le fish del giocatore
+   function mettereScritteUtente(oggettoUtente, nome, fish) {
+      oggettoUtente.innerHTML =`
+         ${nome}<br> <!-- Mostra il nome del giocatore -->
+         Fish non in gioco: ${fish}<br> <!-- Mostra il numero di fish rimanenti per il giocatore -->
+      `;
+   }
+
+   // Funzione per creare le icone dei giocatori nella schermata di gioco
+   function creaIconeUtenti(usernameUtenti, fishGiocatori, indiceGiocatore, utenti) {
+
+      // Memorizza l'indice del client corrente
+      indiceClient = indiceGiocatore;
+      numeroGiocatori = usernameUtenti.length; // Aggiorna il numero di giocatori
+
+      // Aggiunge ogni giocatore visivamente all'interfaccia di gioco
+      for(i = 0; i < numeroGiocatori; i++) {
+         aggiungereUtente(usernameUtenti[i], fishGiocatori[i], i); // Crea un riquadro per ogni giocatore
+      }
+   }
+
+   // Funzione per aggiungere un nuovo giocatore alla schermata di gioco
+   function aggiungereUtente(nomeGiocatore, fishGiocatore, numeroGiocatore) {
+      // Posiziona ogni giocatore sulla schermata di gioco con uno spazio tra di loro
+      l = 30 + (numeroGiocatore * 220); // Calcola la posizione orizzontale
+      t = 170; // Posizione verticale fissa
+      
+      // Crea un nuovo elemento div per rappresentare il giocatore
+      nuovo = document.createElement('div');
+      nuovo.setAttribute('name', 'A'); // Imposta un nome generico per identificare il giocatore
+      nuovo.setAttribute('class', 'giocatore'); // Applica lo stile definito in CSS per i giocatori
+      nuovo.style.height = '200px'; // Altezza del riquadro del giocatore
+      nuovo.style.width = '200px'; // Larghezza del riquadro del giocatore
+      nuovo.style.top = t + 'px'; // Imposta la posizione verticale
+      nuovo.style.left = l + 'px'; // Imposta la posizione orizzontale
+
+      gioco.appendChild(nuovo); // Aggiunge il riquadro del giocatore all'area di gioco
+
+      // Mostra il nome e le fish del giocatore utilizzando la funzione precedente
+      mettereScritteUtente(nuovo, nomeGiocatore, fishGiocatore);
+   }
+
+   webSocket.onmessage = (event) => {
+   const utenti = document.getElementsByName("A"); // Seleziona tutti gli elementi giocatore
+   const data = JSON.parse(event.data); // Converte il messaggio JSON ricevuto dal server in un oggetto
+
+   console.log(data.azione); // Mostra l'azione ricevuta nella console per scopi di debug
+
+   if(data.azione == 'entra') {
+      username.style.visibility = "hidden"; // Nasconde il modulo di accesso
+   }
+
+   if(data.azione == "attesa") {
+      attesa.style.visibility = "visible"; // Mostra il messaggio di attesa
+      nomeUtente = data.chi; // Memorizza il nome dell'utente in attesa
+
+      // Mostra il messaggio di attesa personalizzato
+      attesa.innerHTML = `Mi dispiace ${nomeUtente}, la lobby é piena. <br>
+      Appena si libererá un posto gli utenti in attesa, come te, verranno inseriti in ordine di arrivo.<br>
+      Ci sono  ${data.giocatoriPrima} persone in attesa prima di te`;
+   }
+
+   if(data.azione == "aggiornareNumAttesa") {
+      // Aggiorna il messaggio di attesa mostrando la nuova posizione nella coda
+      attesa.innerHTML = `Mi dispiace ${nomeUtente}, la lobby é piena. <br>
+      Appena si libererá un posto gli utenti in attesa, come te, verranno inseriti in ordine di arrivo.<br>
+      Ci sono  ${data.giocatoriPrima} persone in attesa prima di te`;
+   }
+
+   if(data.azione == "gioco") {
+      attesa.style.visibility = "hidden"; // Nasconde l'area di attesa
+      gioco.style.visibility = "visible"; // Mostra l'area di gioco
+
+      // Crea le icone per ogni giocatore
+      creaIconeUtenti(data.nomiGiocatori, data.fishGiocatori, data.indiceUtente, utenti);
+   }
+
+   if(data.azione == "aggiungereGiocatore") {
+      // Aggiunge un nuovo giocatore al gioco
+      aggiungereUtente(data.nome, data.fish, numeroGiocatori);
+      numeroGiocatori++; // Incrementa il numero totale di giocatori
+   }
+
+   if(data.azione == "uscitaGiocatore") {
+      // Ricrea l'interfaccia dei giocatori dopo l'uscita di qualcuno
+      creaIconeUtenti(data.nomiGiocatori, data.fishGiocatori, data.indiceUtente, utenti);
+   }
+
+   if(data.azione == "puntare") {
+      // Mostra l'interfaccia per effettuare la puntata per il giocatore corrente
+      utenti[indiceClient].innerHTML += `
+         Puntata: <input id = "puntata" type="number">
+         <button onClick='puntare(webSocket);'>Punta</button>
+      `;
+   }
+
+   if(data.azione == "segnarePuntata") {
+      // Mostra la puntata effettuata da un giocatore
+      mettereScritteUtente(utenti[data.indiceClient], data.nomeGiocatore, data.fish);
+      utenti[data.indiceClient].innerHTML += `
+         Puntata: ${data.puntata}
+      `;
+   }
+
+   if(data.azione == "aggiungereCarta") {
+      // Aggiunge una carta al banco o a un giocatore
+      if(data.indicePescata == -1) {
+         if(banco.innerHTML == "Banco") {
+            banco.innerHTML += `<br>Carte: ${data.carta}`;
+         } else {
+            banco.innerHTML += `, ${data.carta}`;
+         }
+      } else {
+         if(utenti[data.indicePescata].innerHTML.includes("Carte")) {
+            utenti[data.indicePescata].innerHTML += `<br>${data.carta}`;
+         } else {
+            utenti[data.indicePescata].innerHTML += `<br>Carte:<br>${data.carta}`;
+         }
+      }
+   }
+
+   if(data.azione == "modificareScritteRaddoppio") {
+      // Modifica l'interfaccia per riflettere il raddoppio della puntata
+      let testo = utenti[data.indiceRaddoppio].innerHTML;
+      let carte = testo.substring(testo.indexOf("Carte"));
+
+      mettereScritteUtente(utenti[data.indiceRaddoppio], testo.substring(0, testo.indexOf("<br>")), data.fish);
+      utenti[data.indiceRaddoppio].innerHTML += `
+         Puntata: ${data.puntata}
+         <br>${carte}
+      `;
+   }
+
+   if(data.azione == "cambiareNome") {
+      giocatoreAttivo.innerHTML = data.giocatoreAttivo; // Mostra il nome del giocatore attivo
+   }
+
+   if(data.azione == "rivelareCartaNascosta") {
+      banco.innerHTML = banco.innerHTML.substring(0, banco.innerHTML.indexOf("N")) + data.carta + banco.innerHTML.substring(banco.innerHTML.indexOf(","));
+   }
+
+   if(data.azione == "scrivereNuoveFish") {
+      // Aggiorna la quantità di fish per ogni giocatore e resetta l'interfaccia del banco
+      for(let i = 0; i < utenti.length; i++) {
+         mettereScritteUtente(utenti[i], data.nomiGiocatori[i], data.fishGiocatori[i])
+      }
+      banco.innerHTML = "Banco"; // Reset del banco
+   }
+};
+
+// Funzione per inviare il nome utente al server per l'ingresso nel gioco
+function entrare(ws) {
+   const nome = document.getElementById('nome'); 
+   if(nome.value != "") {
+      const data = JSON.stringify({"nome": nome.value, azione: "entra"}); // Crea un messaggio JSON
+      ws.send(data); // Invia il messaggio al server
+   }
+}
+
+// Funzione per inviare una puntata al server
+function puntare(ws) {
+   const puntata = document.getElementById('puntata');
+   const data = JSON.stringify({"puntata": puntata.value, azione: "puntare"}); // Crea il messaggio di puntata
+   ws.send(data); // Invia il messaggio al server
+}
+
+// Funzione per inviare l'azione "stare" al server
+function stare(ws) {
+   const data = JSON.stringify({azione: "stare"}); // Crea il messaggio per stare
+   ws.send(data); // Invia il messaggio al server
+}
+
+// Funzione per inviare l'azione "carta" al server
+function carta(ws) {
+   const data = JSON.stringify({azione: "carta"}); // Crea il messaggio per pescare una carta
+   ws.send(data); // Invia il messaggio al server
+}
+
+// Funzione per inviare l'azione "raddoppio" al server
+function raddoppio(ws) {
+   const data = JSON.stringify({azione: "raddoppio"}); // Crea il messaggio per raddoppiare la puntata
+   ws.send(data); // Invia il messaggio al server
+}
+
+</script>
